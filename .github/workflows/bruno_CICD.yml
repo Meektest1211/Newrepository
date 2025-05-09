@@ -1,0 +1,50 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Read environment variables from JSON
+        run: |
+          cat env.json | jq -r 'to_entries | .[] | "echo \(.key)=\(.value) >> $GITHUB_ENV"' | sh
+
+      - name: Use environment variables
+        run: |
+          echo "API_URL is $API_URL"
+          echo "NODE_ENV is $NODE_ENV"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Burno CLI commands
+        uses: krummbar/bruno-run-action@main
+        with:
+          path: bruno/api-it
+          env: integration
+          env-vars: |
+            API_URL=$API_URL
+            NODE_ENV=$NODE_ENV
+          output: output.json
+          output-format: json
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build project
+        run: npm run build
+
+      - name: Deploy to production
+        if: github.ref == 'refs/heads/main'
+        run: npm run deploy
